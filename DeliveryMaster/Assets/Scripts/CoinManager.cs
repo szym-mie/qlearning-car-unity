@@ -35,7 +35,7 @@ public class CoinManager : MonoBehaviour
     {
         if (coinsText != null)
         {
-            coinsText.text = "Coins: " + coins;
+            coinsText.text = coins.ToString();
         }
     }
 }
