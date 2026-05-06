@@ -28,6 +28,12 @@ public class CarNPC : MonoBehaviour
     [SerializeField] private float rayHeightOffset = 0.5f;
     [SerializeField] private float rayForwardOffset = 1.5f;
 
+    [Header("Stuck recovery")]
+    [SerializeField] private float stuckSpeedThreshold = 0.5f;
+    [SerializeField] private float stuckTimeBeforeReverse = 2.5f;
+    [SerializeField] private float reverseDuration = 1f;
+    [SerializeField] private float reverseTorqueMultiplier = 1f;
+
     [SerializeField] private WheelCollider frontLeftWheelCollider;
     [SerializeField] private WheelCollider frontRightWheelCollider;
     [SerializeField] private WheelCollider rearLeftWheelCollider;
@@ -43,6 +49,10 @@ public class CarNPC : MonoBehaviour
     private float steerInput;
     private bool obstacleAhead;
 
+    private float stuckTimer;
+    private float reverseTimer;
+    private bool isReversing;
+
     private void Start()
     {
         rb = GetComponent<Rigidbody>();
@@ -56,10 +66,40 @@ public class CarNPC : MonoBehaviour
         UpdateTarget();
         UpdateSteerInput();
         DetectObstacle();
+        UpdateStuckRecovery();
         HandleMotor();
         HandleSteering();
         LimitSpeed();
         UpdateWheels();
+    }
+
+    private void UpdateStuckRecovery()
+    {
+        if (isReversing)
+        {
+            reverseTimer -= Time.fixedDeltaTime;
+            if (reverseTimer <= 0f)
+            {
+                isReversing = false;
+                stuckTimer = 0f;
+            }
+            return;
+        }
+
+        if (rb.linearVelocity.magnitude < stuckSpeedThreshold)
+        {
+            stuckTimer += Time.fixedDeltaTime;
+            if (stuckTimer >= stuckTimeBeforeReverse)
+            {
+                isReversing = true;
+                reverseTimer = reverseDuration;
+                stuckTimer = 0f;
+            }
+        }
+        else
+        {
+            stuckTimer = 0f;
+        }
     }
 
     private void UpdateTarget()
@@ -112,8 +152,23 @@ public class CarNPC : MonoBehaviour
 
     private void HandleMotor()
     {
-        float torque = obstacleAhead ? 0f : constantForwardInput * motorForce;
-        float brake = obstacleAhead ? brakeForce : 0f;
+        float torque;
+        float brake;
+        if (isReversing)
+        {
+            torque = -motorForce * reverseTorqueMultiplier;
+            brake = 0f;
+        }
+        else if (obstacleAhead)
+        {
+            torque = 0f;
+            brake = brakeForce;
+        }
+        else
+        {
+            torque = constantForwardInput * motorForce;
+            brake = 0f;
+        }
 
         frontLeftWheelCollider.motorTorque = torque;
         frontRightWheelCollider.motorTorque = torque;
@@ -126,7 +181,8 @@ public class CarNPC : MonoBehaviour
 
     private void HandleSteering()
     {
-        currentSteerAngle = maxSteerAngle * steerInput;
+        float effectiveSteer = isReversing ? 0f : steerInput;
+        currentSteerAngle = maxSteerAngle * effectiveSteer;
         frontLeftWheelCollider.steerAngle = currentSteerAngle;
         frontRightWheelCollider.steerAngle = currentSteerAngle;
     }
