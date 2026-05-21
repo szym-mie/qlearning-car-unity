@@ -8,6 +8,9 @@ public class CheckpointTrigger : MonoBehaviour
     [Tooltip("Powiązanie Start↔End. Ustawiane przez MissionManager przy spawnie.")]
     public CheckpointTrigger sibling;
 
+    [Tooltip("Trudność misji: 0 = easy, 1 = hard. Ustawiane przez MissionManager przy spawnie.")]
+    public float difficulty;
+
     [Header("Lifetime (tylko Start)")]
     public float lifetime = 90f;
     public float fadeDuration = 2f;

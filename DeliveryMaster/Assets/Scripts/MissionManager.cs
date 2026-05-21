@@ -26,11 +26,20 @@ public class MissionManager : MonoBehaviour
     [Tooltip("Wysokość nad waypointem na której pojawia się beacon.")]
     public float spawnHeightOffset = 0.5f;
 
-    [Header("Czas misji")]
-    [Tooltip("Sekundy na każdą jednostkę dystansu w linii prostej.")]
-    public float secondsPerUnit = 0.4f;
+    [Header("Czas misji / Trudność")]
+    [Tooltip("Sekundy na każdą jednostkę dystansu — dla najłatwiejszej misji (więcej czasu).")]
+    public float easySecondsPerUnit = 0.6f;
+    [Tooltip("Sekundy na każdą jednostkę dystansu — dla najtrudniejszej misji (mniej czasu).")]
+    public float hardSecondsPerUnit = 0.25f;
     public float minMissionTime = 15f;
     public float maxMissionTime = 120f;
+    [Tooltip("Kolor startu dla najłatwiejszej misji (difficulty=0).")]
+    public Color easyColor = new Color(0.2f, 0.5f, 1f);
+    [Tooltip("Kolor startu dla najtrudniejszej misji (difficulty=1).")]
+    public Color hardColor = new Color(1f, 0.25f, 0.2f);
+    [Tooltip("Przezroczystość beaconów (0 = niewidoczne, 1 = pełne). Wymaga materiału z Rendering Mode=Transparent.")]
+    [Range(0f, 1f)]
+    public float beaconAlpha = 0.5f;
 
     [Header("Nagrody")]
     public int baseReward = 50;
@@ -38,6 +47,8 @@ public class MissionManager : MonoBehaviour
     public float superFastRatio = 0.6f;
     [Tooltip("Próg ratio czasLeft/czasMisji dla tieru Fast (x2).")]
     public float fastRatio = 0.35f;
+    [Tooltip("Bonus do nagrody za trudność. 1.0 = hard daje 2x w stosunku do easy, 0.5 = 1.5x, 2.0 = 3x.")]
+    public float difficultyRewardBonus = 1f;
 
     [Header("UI")]
     public TextMeshProUGUI timerText;
@@ -148,16 +159,42 @@ public class MissionManager : MonoBehaviour
         var startCT = EnsureTrigger(startGO);
         var endCT = EnsureTrigger(endGO);
 
+        float difficulty = Random.value;
+
         startCT.checkpointType = CheckpointType.Start;
         startCT.lifetime = startLifetime;
         startCT.fadeDuration = startFadeDuration;
         startCT.sibling = endCT;
+        startCT.difficulty = difficulty;
 
         endCT.checkpointType = CheckpointType.End;
         endCT.sibling = startCT;
+        endCT.difficulty = difficulty;
+
+        Color tinted = Color.Lerp(easyColor, hardColor, difficulty);
+        tinted.a = beaconAlpha;
+        ApplyTintToBeacon(startGO, tinted);
+        ApplyTintToBeacon(endGO, tinted);
 
         endGO.SetActive(false);
         activeStarts.Add(startCT);
+    }
+
+    private static readonly int ColorId = Shader.PropertyToID("_Color");
+    private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+    private static MaterialPropertyBlock sharedMpb;
+
+    private static void ApplyTintToBeacon(GameObject go, Color c)
+    {
+        if (sharedMpb == null) sharedMpb = new MaterialPropertyBlock();
+        var renderers = go.GetComponentsInChildren<Renderer>();
+        foreach (var r in renderers)
+        {
+            r.GetPropertyBlock(sharedMpb);
+            sharedMpb.SetColor(ColorId, c);
+            sharedMpb.SetColor(BaseColorId, c);
+            r.SetPropertyBlock(sharedMpb);
+        }
     }
 
     private CheckpointTrigger EnsureTrigger(GameObject go)
@@ -204,7 +241,8 @@ public class MissionManager : MonoBehaviour
         Vector3 endPos = currentEnd.transform.position;
 
         float dist = Vector3.Distance(startPos, endPos);
-        currentMissionTime = Mathf.Clamp(dist * secondsPerUnit, minMissionTime, maxMissionTime);
+        float spu = Mathf.Lerp(easySecondsPerUnit, hardSecondsPerUnit, start.difficulty);
+        currentMissionTime = Mathf.Clamp(dist * spu, minMissionTime, maxMissionTime);
         timeLeft = currentMissionTime;
         inRace = true;
 
@@ -232,13 +270,16 @@ public class MissionManager : MonoBehaviour
 
         int multiplier;
         string tier;
-        if (ratio >= superFastRatio) { multiplier = 3; tier = "Super Fast! Premium x3"; }
+        if (ratio >= superFastRatio) { multiplier = 3; tier = "Super Fast! x3"; }
         else if (ratio >= fastRatio) { multiplier = 2; tier = "Fast! x2"; }
         else { multiplier = 1; tier = "Delivered"; }
 
-        int reward = baseReward * multiplier;
+        float diff = currentActiveStart.difficulty;
+        float difficultyMult = 1f + difficultyRewardBonus * diff;
+        int reward = Mathf.RoundToInt(baseReward * multiplier * difficultyMult);
+
         if (CoinManager.Instance != null) CoinManager.Instance.AddCoins(reward);
-        SetState($"{tier} — +{reward} coins");
+        SetState($"{tier} — +{reward} coins  (difficulty {Mathf.RoundToInt(diff * 100)}%)");
 
         if (currentEnd != null) Destroy(currentEnd.gameObject);
         if (currentActiveStart != null) { activeStarts.Remove(currentActiveStart); Destroy(currentActiveStart.gameObject); }

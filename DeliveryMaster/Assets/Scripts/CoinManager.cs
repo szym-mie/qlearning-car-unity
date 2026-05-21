@@ -27,7 +27,7 @@ public class CoinManager : MonoBehaviour
 
     public void AddCoins(int amount)
     {
-        coins += amount;
+        coins = Mathf.Max(0, coins + amount);
         UpdateCoinsUI();
     }
 
