@@ -1,0 +1,58 @@
+{
+  "cars": [
+    {
+      "id": "standard",
+      "name": "STANDARD CAR",
+      "price": 0,
+      "image": "Cars/standard_preview",
+      "characteristics": {
+        "speed": 2,
+        "acceleration": 3,
+        "handling": 4,
+        "braking": 3
+      },
+      "colours": [
+        { "id": "standard_blue",   "name": "Blue",   "image": "Cars/standard_blue",   "price": 0     },
+        { "id": "standard_red",    "name": "Red",     "image": "Cars/standard_red",    "price": 5000  },
+        { "id": "standard_yellow", "name": "Yellow",  "image": "Cars/standard_yellow", "price": 12500 }
+      ],
+      "upgrades": []
+    },
+    {
+      "id": "wagon",
+      "name": "SUPER CAR",
+      "price": 12500,
+      "image": "Cars/wagon_preview",
+      "characteristics": {
+        "speed": 3,
+        "acceleration": 4,
+        "handling": 3,
+        "braking": 4
+      },
+      "colours": [
+        { "id": "wagon_blue",   "name": "Blue",   "image": "Cars/wagon_blue",   "price": 0     },
+        { "id": "wagon_red",    "name": "Red",     "image": "Cars/wagon_red",    "price": 5000  },
+        { "id": "wagon_yellow", "name": "Yellow",  "image": "Cars/wagon_yellow", "price": 12500 }
+      ],
+      "upgrades": []
+    },
+    {
+      "id": "truck",
+      "name": "SUPER X2 CAR",
+      "price": 25000,
+      "image": "Cars/truck_preview",
+      "characteristics": {
+        "speed": 4,
+        "acceleration": 5,
+        "handling": 2,
+        "braking": 3
+      },
+      "colours": [
+        { "id": "truck_blue",   "name": "Blue",   "image": "Cars/truck_blue",   "price": 0     },
+        { "id": "truck_red",    "name": "Red",     "image": "Cars/truck_red",    "price": 5000  },
+        { "id": "truck_yellow", "name": "Yellow",  "image": "Cars/truck_yellow", "price": 12500 }
+      ],
+      "upgrades": []
+    }
+  ]
+}
