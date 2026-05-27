@@ -6,10 +6,10 @@
       "price": 0,
       "image": "Cars/sedan_white",
       "characteristics": {
-        "speed": 2,
-        "acceleration": 3,
-        "handling": 4,
-        "braking": 3
+        "speed": 3,
+        "acceleration": 4,
+        "handling": 5,
+        "braking": 4
       },
       "colours": [
         { "id": "sedan_white", "name": "White", "image": "Cars/sedan_white", "price": 0    },
@@ -24,10 +24,10 @@
       "price": 12500,
       "image": "Cars/suv_green",
       "characteristics": {
-        "speed": 3,
+        "speed": 4,
         "acceleration": 3,
         "handling": 3,
-        "braking": 4
+        "braking": 3
       },
       "colours": [
         { "id": "suv_green",  "name": "Dark Green", "image": "Cars/suv_green",  "price": 0     },
@@ -42,10 +42,10 @@
       "price": 25000,
       "image": "Cars/truck_red",
       "characteristics": {
-        "speed": 4,
-        "acceleration": 4,
+        "speed": 5,
+        "acceleration": 2,
         "handling": 2,
-        "braking": 3
+        "braking": 2
       },
       "colours": [
         { "id": "truck_red",   "name": "Red",        "image": "Cars/truck_red",   "price": 0 },

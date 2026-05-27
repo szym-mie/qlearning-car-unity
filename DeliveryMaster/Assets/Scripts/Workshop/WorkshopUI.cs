@@ -38,7 +38,7 @@ public class WorkshopUI : MonoBehaviour
     [SerializeField] private Transform handlingBarRoot;
     [SerializeField] private Transform brakingBarRoot;
     [SerializeField] private Color barFilledColour = new Color(1f, 0.68f, 0f);
-    [SerializeField] private Color barEmptyColour  = new Color(0.18f, 0.18f, 0.18f);
+    [SerializeField] private Color barEmptyColour  = new Color(0.114f, 0.224f, 0.286f); // #1d3949
 
     private int _carIndex;    // index into CarDatabase.cars (0-2)
     private int _colourIndex; // index into car.colours (0-2)
