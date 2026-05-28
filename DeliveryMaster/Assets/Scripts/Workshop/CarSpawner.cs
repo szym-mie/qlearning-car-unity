@@ -2,8 +2,9 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-// Attach to an empty GameObject in the game scene.
-// Configure all 9 car+colour variants in the Inspector, then assign a spawn point.
+// Place all car GameObjects in the scene (inactive by default).
+// Fill Variants in Inspector: each entry maps carId+colourId to a scene object.
+// On Start, the correct one gets activated.
 public class CarSpawner : MonoBehaviour
 {
     [Serializable]
@@ -11,16 +12,15 @@ public class CarSpawner : MonoBehaviour
     {
         public string carId;
         public string colourId;
-        public GameObject prefab;
+        public GameObject carObject;
     }
 
-    [SerializeField] private List<CarVariant> variants; // fill all 9 in Inspector
-    [SerializeField] private Transform spawnPoint;
+    [SerializeField] private List<CarVariant> variants;
 
     private void Start()
     {
-        string carId     = "standard";
-        string colourId  = "standard_blue";
+        string carId    = "sedan";
+        string colourId = "sedan_white";
 
         if (ShopDataManager.Instance != null)
         {
@@ -29,17 +29,15 @@ public class CarSpawner : MonoBehaviour
         }
 
         CarVariant match = variants.Find(v => v.carId == carId && v.colourId == colourId);
-        if (match?.prefab == null)
+
+        if (match == null)
         {
-            Debug.LogWarning($"CarSpawner: no prefab found for {carId} / {colourId}, using first available.");
-            match = variants.Find(v => v.prefab != null);
+            Debug.LogWarning($"CarSpawner: no variant for {carId}/{colourId}, using first available.");
+            match = variants.Find(v => v.carObject != null);
         }
 
-        if (match?.prefab != null)
-        {
-            Vector3    pos = spawnPoint != null ? spawnPoint.position : Vector3.zero;
-            Quaternion rot = spawnPoint != null ? spawnPoint.rotation : Quaternion.identity;
-            Instantiate(match.prefab, pos, rot);
-        }
+        foreach (var v in variants)
+            if (v.carObject != null)
+                v.carObject.SetActive(v == match);
     }
 }
