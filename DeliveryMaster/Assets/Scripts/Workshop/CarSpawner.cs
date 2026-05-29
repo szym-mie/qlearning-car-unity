@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 
-// Place all car GameObjects in the scene (inactive by default).
-// Fill Variants in Inspector: each entry maps carId+colourId to a scene object.
-// On Start, the correct one gets activated.
 public class CarSpawner : MonoBehaviour
 {
     [Serializable]
@@ -16,6 +14,7 @@ public class CarSpawner : MonoBehaviour
     }
 
     [SerializeField] private List<CarVariant> variants;
+    [SerializeField] private CameraRig cameraRig;
 
     private void Start()
     {
@@ -26,6 +25,16 @@ public class CarSpawner : MonoBehaviour
         {
             carId    = ShopDataManager.Instance.UserProfile.selectedCarId;
             colourId = ShopDataManager.Instance.UserProfile.selectedColourId;
+        }
+        else
+        {
+            string path = Path.Combine(Application.persistentDataPath, "user_profile.json");
+            if (File.Exists(path))
+            {
+                UserProfile profile = JsonUtility.FromJson<UserProfile>(File.ReadAllText(path));
+                carId    = profile.selectedCarId;
+                colourId = profile.selectedColourId;
+            }
         }
 
         CarVariant match = variants.Find(v => v.carId == carId && v.colourId == colourId);
@@ -39,5 +48,15 @@ public class CarSpawner : MonoBehaviour
         foreach (var v in variants)
             if (v.carObject != null)
                 v.carObject.SetActive(v == match);
+
+        if (cameraRig != null && match?.carObject != null)
+        {
+            cameraRig.target = match.carObject.transform;
+            Debug.Log($"CarSpawner: camera target set to {match.carObject.name}");
+        }
+        else
+        {
+            Debug.LogWarning($"CarSpawner: cameraRig={cameraRig}, match={match?.carObject?.name}");
+        }
     }
 }
