@@ -1,12 +1,71 @@
 {
   "Version": 1,
   "WorkspaceRootPath": "C:\\Users\\szymm\\Documents\\iwium\\qlearning-car-unity\\DeliveryMaster\\",
-  "Documents": [],
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{AFD9A432-9D4F-09C0-C050-0331C6107FD6}|Assembly-CSharp.csproj|c:\\users\\szymm\\documents\\iwium\\qlearning-car-unity\\deliverymaster\\assets\\scripts\\qlearn.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{AFD9A432-9D4F-09C0-C050-0331C6107FD6}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\qlearn.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AFD9A432-9D4F-09C0-C050-0331C6107FD6}|Assembly-CSharp.csproj|c:\\users\\szymm\\documents\\iwium\\qlearning-car-unity\\deliverymaster\\assets\\scripts\\carcontrollernpc.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{AFD9A432-9D4F-09C0-C050-0331C6107FD6}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\carcontrollernpc.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AFD9A432-9D4F-09C0-C050-0331C6107FD6}|Assembly-CSharp.csproj|c:\\users\\szymm\\documents\\iwium\\qlearning-car-unity\\deliverymaster\\assets\\scripts\\carcontroller2.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{AFD9A432-9D4F-09C0-C050-0331C6107FD6}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\carcontroller2.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
   "DocumentGroupContainers": [
     {
       "Orientation": 0,
       "VerticalTabListWidth": 256,
-      "DocumentGroups": []
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "QLearn.cs",
+              "DocumentMoniker": "C:\\Users\\szymm\\Documents\\iwium\\qlearning-car-unity\\DeliveryMaster\\Assets\\Scripts\\QLearn.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\QLearn.cs",
+              "ToolTip": "C:\\Users\\szymm\\Documents\\iwium\\qlearning-car-unity\\DeliveryMaster\\Assets\\Scripts\\QLearn.cs",
+              "RelativeToolTip": "Assets\\Scripts\\QLearn.cs",
+              "ViewState": "AgIAAHkAAAAAAAAAAADwv4YAAAAaAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-02T09:04:21.411Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "CarControllerNPC.cs",
+              "DocumentMoniker": "C:\\Users\\szymm\\Documents\\iwium\\qlearning-car-unity\\DeliveryMaster\\Assets\\Scripts\\CarControllerNPC.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\CarControllerNPC.cs",
+              "ToolTip": "C:\\Users\\szymm\\Documents\\iwium\\qlearning-car-unity\\DeliveryMaster\\Assets\\Scripts\\CarControllerNPC.cs",
+              "RelativeToolTip": "Assets\\Scripts\\CarControllerNPC.cs",
+              "ViewState": "AgIAAB0BAAAAAAAAAAAAADUBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-02T08:09:45.563Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "CarController2.cs",
+              "DocumentMoniker": "C:\\Users\\szymm\\Documents\\iwium\\qlearning-car-unity\\DeliveryMaster\\Assets\\Scripts\\CarController2.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\CarController2.cs",
+              "ToolTip": "C:\\Users\\szymm\\Documents\\iwium\\qlearning-car-unity\\DeliveryMaster\\Assets\\Scripts\\CarController2.cs",
+              "RelativeToolTip": "Assets\\Scripts\\CarController2.cs",
+              "ViewState": "AgIAADsAAAAAAAAAAAAAwEgAAABBAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-02T08:09:17.901Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
     }
   ]
 }
