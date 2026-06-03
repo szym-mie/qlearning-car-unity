@@ -1,19 +1,24 @@
 using Unity.Collections;
 using Unity.Mathematics;
 
-/* TODO: model the state of the car
-wariant 1:
-x, y - pozycja samochodu
-dir - kierunek w radianach (cos jak kompas)
-vel - predkosc samochodu
-dist_l, dist_r - odleglosc od przeszkod w metrach (raycasty)s
- */
 public struct State
 {
-    public int x;
-    public int vx;
-    public int a;
-    public int va;
+    // pozycje x, y sa w odniesieniu od startu manewru
+    public int x; // x > 0.0 -> samochod po prawej stronie, x < 0.0 -> samochod po lewej stronie
+    public int y; // y > 0.0 -> samochod pojechal do przodu
+    public int dir; // dir > 0.0 -> obrocony w prawo, dir < 0.0 -> obrocony w lewo
+    public int vel; // predkosc samochodu do przodu
+    public int distL; // dystans do przeszkody - czujnik z lewej strony pojazdu
+    public int distR; // dystans do przeszkody - czujnik z prawej strony pojazdu
+}
+
+public enum Action
+{
+    IDLE = 0, 
+    DRIVE_LEFT = 1, 
+    DRIVE_RIGHT = 2, 
+    DRIVE_FWD = 3,  
+    REVERSE = 4
 }
 
 /* How To Learn
@@ -30,7 +35,7 @@ Attempt {
 
 public class QLearner
 {
-    private readonly int4 bins;
+    private readonly int[] bins;
     private readonly int actionCount;
 
     private float alpha;
@@ -40,7 +45,7 @@ public class QLearner
     private NativeArray<float> q;
 
     public QLearner(
-        int4 bins,
+        int[] bins,
         int actionCount,
         float alpha,
         float gamma,
@@ -53,17 +58,13 @@ public class QLearner
         this.gamma = gamma;
         this.epsilon = epsilon;
 
-        int qSize =
-            bins.x *
-            bins.y *
-            bins.z *
-            bins.w *
-            actionCount;
+        int qSize = actionCount;
+        foreach (int bin in bins)
+        {
+            qSize *= bin;
+        }
 
-        q = new NativeArray<float>(
-            qSize,
-            Allocator.Persistent,
-            NativeArrayOptions.ClearMemory);
+        q = new NativeArray<float>(qSize, Allocator.Persistent, NativeArrayOptions.ClearMemory);
     }
 
     public void Dispose()
@@ -75,30 +76,30 @@ public class QLearner
     private int QIndex(State s, int action)
     {
         int idxAcc = s.x;
-        idxAcc *= bins.y;
-        idxAcc += s.vx;
-        idxAcc *= bins.z;
-        idxAcc += s.a;
-        idxAcc *= bins.w;
-        idxAcc += s.va;
+        idxAcc *= bins[1];
+        idxAcc += s.y;
+        idxAcc *= bins[2];
+        idxAcc += s.vel;
+        idxAcc *= bins[3];
+        idxAcc += s.dir;
+        idxAcc *= bins[4];
+        idxAcc += s.distL;
+        idxAcc *= bins[5];
+        idxAcc += s.distR;
         idxAcc *= actionCount;
         return idxAcc + action;
-        //return
-        //    ((((s.x * bins.y)
-        //     + s.vx) * bins.z
-        //     + s.a) * bins.w
-        //     + s.va) * actionCount
-        //     + action;
     }
 
-    public State Discretise(float4 observation)
+    public State Discretise(float[] observation)
     {
         return new State
         {
-            x = Digitize(observation.x, -2.5f, 2.5f, bins.x),
-            vx = Digitize(observation.y, -0.5f, 0.5f, bins.y),
-            a = Digitize(observation.z, -0.5f, 0.5f, bins.z),
-            va = Digitize(observation.w, -1.0f, 1.0f, bins.w)
+            x = Digitize(observation[0], -2.5f, 2.5f, bins[0]),
+            y = Digitize(observation[1], -1.0f, 11.0f, bins[1]),
+            dir = Digitize(observation[2], -1.0f, 1.0f, bins[2]),
+            vel = Digitize(observation[3], -1.0f, 3.0f, bins[3]),
+            distL = Digitize(observation[4], 0.0f, 10.0f, bins[4]),
+            distR = Digitize(observation[4], 0.0f, 10.0f, bins[5])
         };
     }
 
@@ -109,24 +110,20 @@ public class QLearner
         int binCount)
     {
         float t = math.unlerp(minValue, maxValue, value);
-
         int idx = (int)math.floor(t * (binCount - 1));
-
         return math.clamp(idx, 0, binCount - 1);
     }
 
-    public int PickAction(State state)
+    public Action PickAction(State state)
     {
         if (UnityEngine.Random.value < epsilon)
-            return UnityEngine.Random.Range(0, actionCount);
+            return (Action)UnityEngine.Random.Range(0, actionCount);
 
         float bestQ = float.NegativeInfinity;
         int bestAction = 0;
-
-        for (int a = 0; a < actionCount; ++a)
+        for (int a = 0; a < actionCount; a++)
         {
             float qv = q[QIndex(state, a)];
-
             if (qv > bestQ)
             {
                 bestQ = qv;
@@ -134,36 +131,25 @@ public class QLearner
             }
         }
 
-        return bestAction;
+        return (Action)bestAction;
     }
 
     public void UpdateKnowledge(
         State state,
-        int action,
+        Action action,
         State nextState,
         float reward)
     {
         float maxFutureQ = float.NegativeInfinity;
-
-        for (int a = 0; a < actionCount; ++a)
+        for (int a = 0; a < actionCount; a++)
         {
-            maxFutureQ =
-                math.max(
-                    maxFutureQ,
-                    q[QIndex(nextState, a)]);
+            maxFutureQ = math.max(maxFutureQ, q[QIndex(nextState, a)]);
         }
 
-        int idx = QIndex(state, action);
-
+        int idx = QIndex(state, (int)action);
         float currentQ = q[idx];
-
-        float target =
-            reward +
-            gamma * maxFutureQ;
-
-        q[idx] =
-            (1f - alpha) * currentQ +
-            alpha * target;
+        float target = reward + gamma * maxFutureQ;
+        q[idx] = (1f - alpha) * currentQ + alpha * target;
     }
 
     public void SetAlpha(float alpha)

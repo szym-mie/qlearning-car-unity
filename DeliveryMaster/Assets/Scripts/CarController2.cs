@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class CarController2 : MonoBehaviour
@@ -65,6 +66,19 @@ public class CarController2 : MonoBehaviour
     private bool isReversing;
     private float currentStuckThreshold;
 
+    // agentowe rzeczy
+    private QLearner learner;
+    private State agentState;
+    private float[] agentObservation;
+    private float agentRewardMin;
+    private float agentRewardMax;
+    private float agentRewardSum;
+    private int agentAttemptCount;
+    private Action agentAction;
+    private bool isAgentActive;
+    private Vector2 agentZeroPoint; // punkt zerowy ukladu wsporzednych dla qlearn
+    private int agentMotor; // 1 - do przodu, 0 - hamuj, -1 - cofaj
+
     private void Start()
     {
         rb = GetComponent<Rigidbody>();
@@ -72,11 +86,20 @@ public class CarController2 : MonoBehaviour
 
         currentTarget = startWaypoint != null ? startWaypoint : FindNearestWaypoint();
         RerollStuckThreshold();
+
+        // inicjalizacja agenta
+        int[] bins = new int[6] { 5, 15, 5, 5, 2, 2 };
+        int actionCount = Enum.GetNames(typeof(Action)).Length;
+        learner = new QLearner(bins, actionCount, 0.01f, 0.99f, 0.99f);
+        agentState = new State { x = 0, y = 0, dir = 0, vel = 0, distL = 1, distR = 1 };
+        agentObservation = new float[6] { 0f, 0f, 0f, 0f, 10f, 10f };
+        agentRewardMax = 0f;
+        agentRewardMin = 500f; // TODO zmien na jakas sensowniejsza wartosc
     }
 
     private void RerollStuckThreshold()
     {
-        currentStuckThreshold = Random.Range(stuckTimeBeforeReverseMin, stuckTimeBeforeReverseMax);
+        currentStuckThreshold = UnityEngine.Random.Range(stuckTimeBeforeReverseMin, stuckTimeBeforeReverseMax);
     }
 
     private void FixedUpdate()
@@ -85,6 +108,7 @@ public class CarController2 : MonoBehaviour
         UpdateSteerInput();
         DetectObstacle();
         UpdateStuckRecovery();
+        if (isAgentActive) UpdateAgent();
         HandleMotor();
         HandleSteering();
         LimitSpeed();
@@ -99,13 +123,21 @@ public class CarController2 : MonoBehaviour
             if (reverseTimer <= 0f)
             {
                 isReversing = false;
+                // start manewru omijania (QLearn)
+                Debug.Log("start agent");
+                agentZeroPoint.x = transform.position.x;
+                agentZeroPoint.y = transform.position.z;
+                Debug.Log($"agent zero: {agentZeroPoint}");
+                isAgentActive = true;
                 stuckTimer = 0f;
                 RerollStuckThreshold();
             }
             return;
         }
 
-        if (rb.linearVelocity.magnitude < stuckSpeedThreshold)
+        if (!isAgentActive)
+        {
+            if (rb.linearVelocity.magnitude < stuckSpeedThreshold)
         {
             stuckTimer += Time.fixedDeltaTime;
             if (stuckTimer >= currentStuckThreshold)
@@ -123,6 +155,78 @@ public class CarController2 : MonoBehaviour
             }
             stuckTimer = 0f;
         }
+        }
+    }
+
+    private float[] MakeObservation() 
+    {
+        Vector2 worldPosition;
+        worldPosition.x = transform.position.x;
+        worldPosition.y = transform.position.z;
+        Vector2 localPosition = worldPosition - agentZeroPoint;
+        float dir = rb.rotation.eulerAngles.y;
+        if (dir >= 180f) {
+            // normalizacja do zakresu (-180, +180)
+            dir -= 360f;
+        }
+        float vel = rb.linearVelocity.magnitude;
+        float distL = 10.0f;
+        float distR = 10.0f;
+        return new float[6] { localPosition.x, localPosition.y, dir, vel, distL, distR };
+    }
+
+    private float GetReward(float[] observation)
+    {
+        return observation[1]; // y
+    }
+
+    private bool ShouldAgentRepeat(float[] observation)
+    {
+        // TODO kiedy zblizymy sie za bardzo do przeszkody
+
+        // TODO kiedy wyjedziemy gdzies poza obszar srodowiska
+
+        // TODO kiedy za dlugo stoimy (moze)
+        return false;
+    }
+
+    private void UpdateAgent()
+    {
+        //while not truncated and not terminated:
+        //    new_action = self.pick_action(state)
+        //    new_observation, reward, terminated, truncated, info = self.env.step(new_action)
+        //    new_state = self.discretise(new_observation)
+        //    self.update_knowledge(action, new_action, state, new_state, reward)
+        //    action = new_action
+        //    state = new_state
+        //    reward_sum += float(reward)
+
+        float[] observation = MakeObservation();
+        if (ShouldAgentRepeat(observation)) 
+        {
+            UpdateAfterAgentAttempt();
+            // TODO: przestan probowac po zadanej liczb prob
+            ReinitAgent();
+        }
+        else
+        {
+            float reward = GetReward(observation);
+            agentRewardSum += reward;
+            State newState = learner.Discretise(observation);
+            learner.UpdateKnowledge(agentState, agentAction, newState, reward);
+            agentAction = learner.PickAction(agentState);
+            agentState = newState;
+        }
+    }
+
+    private void UpdateAfterAgentAttempt()
+    {
+        agentAttemptCount++;
+    }
+
+    private void ReinitAgent()
+    {
+
     }
 
     private void UpdateTarget()
@@ -194,15 +298,15 @@ public class CarController2 : MonoBehaviour
         float total = ws + wr + wl;
 
         // Fallback: jeśli wszystkie wagi to 0 (np. user wyzerował) — losuj uniformly.
-        if (total <= 0f) return candidates[Random.Range(0, candidates.Count)];
+        if (total <= 0f) return candidates[UnityEngine.Random.Range(0, candidates.Count)];
 
-        float roll = Random.value * total;
+        float roll = UnityEngine.Random.value * total;
         List<Waypoint> bucket;
         if (roll < ws) bucket = straightOnes;
         else if (roll < ws + wr) bucket = rightOnes;
         else bucket = leftOnes;
 
-        return bucket[Random.Range(0, bucket.Count)];
+        return bucket[UnityEngine.Random.Range(0, bucket.Count)];
     }
 
     private void UpdateSteerInput()
@@ -243,6 +347,25 @@ public class CarController2 : MonoBehaviour
             torque = -motorForce * reverseTorqueMultiplier;
             brake = 0f;
         }
+        else if (isAgentActive)
+        {
+            // agent obsluguje pedaly gazu i hamulca
+            if (agentAction == Action.DRIVE_LEFT || agentAction == Action.DRIVE_RIGHT || agentAction == Action.DRIVE_FWD)
+            {
+                torque = motorForce;
+                brake = 0f;
+            }
+            else if (agentAction == Action.REVERSE)
+            {
+                torque = -motorForce * reverseTorqueMultiplier;
+                brake = 0f;
+            }
+            else
+            {
+                torque = 0f;
+                brake = brakeForce;
+            }
+        }
         else if (obstacleAhead)
         {
             torque = 0f;
@@ -265,8 +388,26 @@ public class CarController2 : MonoBehaviour
 
     private void HandleSteering()
     {
-        float effectiveSteer = isReversing ? 0f : steerInput;
-        currentSteerAngle = maxSteerAngle * effectiveSteer;
+        float currentSteerAngle;
+        if (isAgentActive)
+        {
+            float agentSteerInput = 0f;
+            // agent obsluguje pedaly gazu i hamulca
+            if (agentAction == Action.DRIVE_LEFT)
+            {
+                steerInput = -1f;
+            }
+            if (agentAction == Action.DRIVE_RIGHT)
+            {
+                steerInput = +1f;
+            }
+            currentSteerAngle = maxSteerAngle * agentSteerInput;
+        }
+        else
+        {
+            float effectiveSteer = isReversing ? 0f : steerInput;
+            currentSteerAngle = maxSteerAngle * effectiveSteer;
+        }
         frontLeftWheelCollider.steerAngle = currentSteerAngle;
         frontRightWheelCollider.steerAngle = currentSteerAngle;
     }
