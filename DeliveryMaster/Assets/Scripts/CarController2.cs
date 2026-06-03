@@ -25,11 +25,12 @@ public class CarController2 : MonoBehaviour
 
     [Header("Obstacle detection")]
     [SerializeField] private LayerMask obstacleMask = ~0;
-    [SerializeField] private float detectionDistance = 6f;
+    [SerializeField] private float detectionDistance = 4f;
     [SerializeField] private float rayHeightOffset = 0.5f;
-    [SerializeField] private float rayForwardOffset = 1.5f;
+    [SerializeField] private float rayForwardOffset = 3f;
     [Tooltip("Boczne odsunięcie promieni od osi auta (≈ pół szerokości auta).")]
-    [SerializeField] private float raySideOffset = 0.7f;
+    [SerializeField] private float raySideOffset = 1f;
+    [SerializeField] private float rayDirOffset = 5f;
 
     [Header("Stuck recovery")]
     [SerializeField] private float stuckSpeedThreshold = 0.5f;
@@ -68,16 +69,19 @@ public class CarController2 : MonoBehaviour
 
     // agentowe rzeczy
     private QLearner learner;
-    private State agentState;
-    private float[] agentObservation;
+    private State agentLastState;
+    private Observation agentLastObservation;
     private float agentRewardMin;
     private float agentRewardMax;
     private float agentRewardSum;
     private int agentAttemptCount;
+    private bool agentEndPreCond = false;
+    private bool isAgentStuck;
+    private float agentStuckTimer;
     private Action agentAction;
     private bool isAgentActive;
     private Vector2 agentZeroPoint; // punkt zerowy ukladu wsporzednych dla qlearn
-    private int agentMotor; // 1 - do przodu, 0 - hamuj, -1 - cofaj
+    private Vector3 agentInitPosition; // punkt do teleportacji samochodu po probie
 
     private void Start()
     {
@@ -88,11 +92,12 @@ public class CarController2 : MonoBehaviour
         RerollStuckThreshold();
 
         // inicjalizacja agenta
-        int[] bins = new int[6] { 5, 15, 5, 5, 2, 2 };
+        int[] bins = new int[6] { 1, 15, 5, 1, 5, 5 };
+        //int[] bins = new int[6] { 5, 15, 5, 5, 5, 5 };
         int actionCount = Enum.GetNames(typeof(Action)).Length;
-        learner = new QLearner(bins, actionCount, 0.01f, 0.99f, 0.99f);
-        agentState = new State { x = 0, y = 0, dir = 0, vel = 0, distL = 1, distR = 1 };
-        agentObservation = new float[6] { 0f, 0f, 0f, 0f, 10f, 10f };
+        learner = new QLearner(bins, actionCount, 0.1f, 0.98f, 1f);
+        agentLastState = new State { x = 0, y = 0, dir = 0, vel = 0, distL = 1, distR = 1 };
+        agentLastObservation = new Observation { };
         agentRewardMax = 0f;
         agentRewardMin = 500f; // TODO zmien na jakas sensowniejsza wartosc
     }
@@ -125,6 +130,7 @@ public class CarController2 : MonoBehaviour
                 isReversing = false;
                 // start manewru omijania (QLearn)
                 Debug.Log("start agent");
+                agentInitPosition = transform.position;
                 agentZeroPoint.x = transform.position.x;
                 agentZeroPoint.y = transform.position.z;
                 Debug.Log($"agent zero: {agentZeroPoint}");
@@ -138,27 +144,42 @@ public class CarController2 : MonoBehaviour
         if (!isAgentActive)
         {
             if (rb.linearVelocity.magnitude < stuckSpeedThreshold)
-        {
-            stuckTimer += Time.fixedDeltaTime;
-            if (stuckTimer >= currentStuckThreshold)
             {
-                isReversing = true;
-                reverseTimer = reverseDuration;
+                stuckTimer += Time.fixedDeltaTime;
+                if (stuckTimer >= currentStuckThreshold)
+                {
+                    isReversing = true;
+                    reverseTimer = reverseDuration;
+                    stuckTimer = 0f;
+                }
+            }
+            else
+            {
+                if (stuckTimer > 0f)
+                {
+                    RerollStuckThreshold();
+                }
                 stuckTimer = 0f;
             }
         }
-        else
-        {
-            if (stuckTimer > 0f)
-            {
-                RerollStuckThreshold();
-            }
-            stuckTimer = 0f;
-        }
-        }
     }
 
-    private float[] MakeObservation() 
+    private Ray senseDistRay = new();
+    private RaycastHit senseDistHit = new();
+
+    private float SenseDist(Quaternion offsetRotation, Vector3 offsetLinear, float maxDistance)
+    {
+        Vector3 direction = offsetRotation * transform.forward;
+        senseDistRay.origin = transform.position + transform.rotation * offsetLinear;
+        senseDistRay.direction = direction;
+        bool isHit = Physics.Raycast(senseDistRay, out senseDistHit, maxDistance, obstacleMask, QueryTriggerInteraction.Ignore);
+        float distance = isHit ? senseDistHit.distance: maxDistance;
+        Debug.DrawRay(senseDistRay.origin, senseDistRay.direction * distance, Color.purple, 0f, false);
+        return distance;
+    }
+
+
+    private Observation MakeObservation() 
     {
         Vector2 worldPosition;
         worldPosition.x = transform.position.x;
@@ -170,63 +191,141 @@ public class CarController2 : MonoBehaviour
             dir -= 360f;
         }
         float vel = rb.linearVelocity.magnitude;
-        float distL = 10.0f;
-        float distR = 10.0f;
-        return new float[6] { localPosition.x, localPosition.y, dir, vel, distL, distR };
+
+        Quaternion senseDistLRotation = Quaternion.AngleAxis(-rayDirOffset, Vector3.up);
+        Quaternion senseDistRRotation = Quaternion.AngleAxis(+rayDirOffset, Vector3.up);
+        Vector3 senseDistLOffset = new(-raySideOffset, rayHeightOffset, rayForwardOffset);
+        Vector3 senseDistROffset = new(+raySideOffset, rayHeightOffset, rayForwardOffset);
+        float distL = SenseDist(senseDistLRotation, senseDistLOffset, 20f);
+        float distR = SenseDist(senseDistRRotation, senseDistROffset, 20f);
+        return new Observation 
+        { 
+            x = localPosition.x, 
+            y = localPosition.y, 
+            dir = dir,
+            vel = vel, 
+            distL = distL, 
+            distR = distR 
+        };
     }
 
-    private float GetReward(float[] observation)
+    private float GetReward(Observation observation)
     {
-        return observation[1]; // y
+        float x = observation.x;
+        // nie wyjezdzaj poza droge
+        if (Mathf.Abs(x) > 3)
+        {
+            return 0f;
+        }
+        float y = observation.y;
+        float dy = y - agentLastObservation.y;
+        // wiecej nagrod za poradzenie sobie z przeszkoda
+        if (y > 12f) {
+            return dy * 100;
+        }
+        // im blizszy dystans tym gorsza nagroda
+        float distL = observation.distL / 5f;
+        float distR = observation.distR / 5f;
+        float distMin = Mathf.Min(distL, distR);
+        // przed przeszkoda dawaj punkty jazde w lewo a po przeszkodzie - w prawo
+        float dirMult = 1f;
+        float dir = observation.dir;
+        if (y < 6f)
+        {
+            float dirDiff = (dir - 20f) * 4f;
+            dirMult += Mathf.Cos(dirDiff) * 0.5f;
+        }
+        if (y > 8f)
+        {
+            float dirDiff = (dir + 20f) * 4f;
+            dirMult += Mathf.Cos(dirDiff) * 0.5f;
+        }
+        return dy * distMin * dirMult;
     }
 
-    private bool ShouldAgentRepeat(float[] observation)
+    private bool ShouldAgentRepeat(Observation observation)
     {
-        // TODO kiedy zblizymy sie za bardzo do przeszkody
-
+        // inne testy np. OnCollisionEnter nie powiodly sie
+        if (agentEndPreCond) { return true; }
+        // kiedy zblizymy sie za bardzo do przeszkody
+        if (observation.distL < 1f || observation.distR < 1f) { return true; }
         // TODO kiedy wyjedziemy gdzies poza obszar srodowiska
-
-        // TODO kiedy za dlugo stoimy (moze)
+        // jezeli agent jedzie bardzo wolno, odpal czasomierz
+        float vel = observation.vel;
+        if (vel < 0.5f && !isAgentStuck)
+        {
+            Debug.Log("agent stuck");
+            isAgentStuck = true;
+            agentStuckTimer = 0f;
+        }
+        // anty-utkniecie dla agenta
+        if (isAgentStuck)
+        {
+            agentStuckTimer += Time.deltaTime;
+            // histereza - agent musi przyspieszyc zeby wylaczyc zabezpieczenia
+            // to powinno wystarczyc aby uniknac cyklu przyspieszam-hamuje
+            if (vel > 2.0f) { 
+                isAgentStuck = false;
+                Debug.Log("agent got unstuck");
+            }
+            //if (vel > 0.5f) { agentStuckTimer -= Time.deltaTime * 2; }
+            // jezeli sie slimaczy za dlugo to koniec
+            if (agentStuckTimer > 1f) { return true; }
+        }
+        // TODO kiedy agentowi sie uda :)
+        if (observation.y > 20f) {  return true; }
         return false;
     }
 
     private void UpdateAgent()
     {
-        //while not truncated and not terminated:
-        //    new_action = self.pick_action(state)
-        //    new_observation, reward, terminated, truncated, info = self.env.step(new_action)
-        //    new_state = self.discretise(new_observation)
-        //    self.update_knowledge(action, new_action, state, new_state, reward)
-        //    action = new_action
-        //    state = new_state
-        //    reward_sum += float(reward)
-
-        float[] observation = MakeObservation();
-        if (ShouldAgentRepeat(observation)) 
+        Observation newObservation = MakeObservation();
+        if (ShouldAgentRepeat(newObservation)) 
         {
+            Debug.Log($"Attempt {agentAttemptCount}: y = {newObservation.y}, reward = {agentRewardSum}, epsilon = {learner.epsilon}");
+
             UpdateAfterAgentAttempt();
             // TODO: przestan probowac po zadanej liczb prob
             ReinitAgent();
         }
         else
         {
-            float reward = GetReward(observation);
+            float reward = GetReward(newObservation);
             agentRewardSum += reward;
-            State newState = learner.Discretise(observation);
-            learner.UpdateKnowledge(agentState, agentAction, newState, reward);
-            agentAction = learner.PickAction(agentState);
-            agentState = newState;
+            State newState = learner.Discretise(newObservation);
+            learner.UpdateKnowledge(agentLastState, agentAction, newState, reward);
+            agentAction = learner.PickAction(agentLastState);
+            agentLastState = newState;
+            agentLastObservation = newObservation;
         }
     }
 
     private void UpdateAfterAgentAttempt()
     {
         agentAttemptCount++;
+        agentRewardMax = Mathf.Max(agentRewardMax, agentRewardSum);
+        agentRewardMin = Mathf.Min(agentRewardMin, agentRewardSum);
+        if (agentAttemptCount > 150)
+        {
+            learner.epsilon *= 0.995f;
+        }
     }
 
     private void ReinitAgent()
     {
+        agentRewardSum = 0f;
+        agentEndPreCond = false;
+        transform.position = agentInitPosition;
+        transform.rotation = Quaternion.identity;
+        rb.rotation = Quaternion.identity;
+        agentLastObservation = MakeObservation();
+        isAgentStuck = false;
+        agentStuckTimer = 0f;
+    }
 
+    private void OnCollisionEnter(Collision collision)
+    {
+        agentEndPreCond = true;
     }
 
     private void UpdateTarget()
@@ -357,7 +456,9 @@ public class CarController2 : MonoBehaviour
             }
             else if (agentAction == Action.REVERSE)
             {
-                torque = -motorForce * reverseTorqueMultiplier;
+                // TODO na razie bez cofania
+                torque = motorForce;
+                //torque = -motorForce * reverseTorqueMultiplier;
                 brake = 0f;
             }
             else
@@ -395,11 +496,11 @@ public class CarController2 : MonoBehaviour
             // agent obsluguje pedaly gazu i hamulca
             if (agentAction == Action.DRIVE_LEFT)
             {
-                steerInput = -1f;
+                agentSteerInput = -1f;
             }
             if (agentAction == Action.DRIVE_RIGHT)
             {
-                steerInput = +1f;
+                agentSteerInput = +1f;
             }
             currentSteerAngle = maxSteerAngle * agentSteerInput;
         }

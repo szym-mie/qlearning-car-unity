@@ -12,6 +12,17 @@ public struct State
     public int distR; // dystans do przeszkody - czujnik z prawej strony pojazdu
 }
 
+public struct Observation
+{
+    // opis pol identyczny jak dla State, tylko nie-dyskretny
+    public float x;
+    public float y;
+    public float dir;
+    public float vel;
+    public float distL;
+    public float distR;
+}
+
 public enum Action
 {
     IDLE = 0, 
@@ -35,12 +46,12 @@ Attempt {
 
 public class QLearner
 {
+    public float alpha;
+    public float epsilon;
+
     private readonly int[] bins;
     private readonly int actionCount;
-
-    private float alpha;
     private readonly float gamma;
-    private float epsilon;
 
     private NativeArray<float> q;
 
@@ -90,16 +101,16 @@ public class QLearner
         return idxAcc + action;
     }
 
-    public State Discretise(float[] observation)
+    public State Discretise(Observation observation)
     {
         return new State
         {
-            x = Digitize(observation[0], -2.5f, 2.5f, bins[0]),
-            y = Digitize(observation[1], -1.0f, 11.0f, bins[1]),
-            dir = Digitize(observation[2], -1.0f, 1.0f, bins[2]),
-            vel = Digitize(observation[3], -1.0f, 3.0f, bins[3]),
-            distL = Digitize(observation[4], 0.0f, 10.0f, bins[4]),
-            distR = Digitize(observation[4], 0.0f, 10.0f, bins[5])
+            x = Digitize(observation.x, -2.5f, +2.5f, bins[0]),
+            y = Digitize(observation.y, -1.0f, +15.0f, bins[1]),
+            dir = Digitize(observation.dir, -40.0f, +40.0f, bins[2]),
+            vel = Digitize(observation.vel, -1.0f, +3.0f, bins[3]),
+            distL = Digitize(observation.distL, +0.0f, +10.0f, bins[4]),
+            distR = Digitize(observation.distR, +0.0f, +10.0f, bins[5])
         };
     }
 
@@ -150,15 +161,5 @@ public class QLearner
         float currentQ = q[idx];
         float target = reward + gamma * maxFutureQ;
         q[idx] = (1f - alpha) * currentQ + alpha * target;
-    }
-
-    public void SetAlpha(float alpha)
-    {
-        this.alpha = alpha;
-    }
-
-    public void SetEpsilon(float epsilon)
-    {
-        this.epsilon = epsilon;
     }
 }

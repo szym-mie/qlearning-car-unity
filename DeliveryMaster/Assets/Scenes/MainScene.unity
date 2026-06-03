@@ -12741,7 +12741,7 @@ Transform:
   m_GameObject: {fileID: 1121430693}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 2.9, y: 0.94, z: 32.6}
+  m_LocalPosition: {x: 4.97, y: 0.94, z: 32.6}
   m_LocalScale: {x: 4, y: 2, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -22600,10 +22600,11 @@ MonoBehaviour:
   obstacleMask:
     serializedVersion: 2
     m_Bits: 4294967295
-  detectionDistance: 6
+  detectionDistance: 4
   rayHeightOffset: 0.5
-  rayForwardOffset: 1.5
-  raySideOffset: 0.7
+  rayForwardOffset: 3
+  raySideOffset: 1
+  rayDirOffset: 5
   stuckSpeedThreshold: 0.5
   stuckTimeBeforeReverseMin: 2
   stuckTimeBeforeReverseMax: 3

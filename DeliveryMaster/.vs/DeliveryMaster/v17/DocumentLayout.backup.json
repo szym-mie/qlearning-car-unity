@@ -7,11 +7,11 @@
       "RelativeMoniker": "D:0:0:{AFD9A432-9D4F-09C0-C050-0331C6107FD6}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\qlearn.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{AFD9A432-9D4F-09C0-C050-0331C6107FD6}|Assembly-CSharp.csproj|c:\\users\\szymm\\documents\\iwium\\qlearning-car-unity\\deliverymaster\\assets\\scripts\\carcontrollernpc.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "AbsoluteMoniker": "D:0:0:{AFD9A432-9D4F-09C0-C050-0331C6107FD6}|Assembly-CSharp.csproj|C:\\Users\\szymm\\Documents\\iwium\\qlearning-car-unity\\DeliveryMaster\\assets\\scripts\\carcontrollernpc.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{AFD9A432-9D4F-09C0-C050-0331C6107FD6}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\carcontrollernpc.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{AFD9A432-9D4F-09C0-C050-0331C6107FD6}|Assembly-CSharp.csproj|c:\\users\\szymm\\documents\\iwium\\qlearning-car-unity\\deliverymaster\\assets\\scripts\\carcontroller2.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "AbsoluteMoniker": "D:0:0:{AFD9A432-9D4F-09C0-C050-0331C6107FD6}|Assembly-CSharp.csproj|C:\\Users\\szymm\\Documents\\iwium\\qlearning-car-unity\\DeliveryMaster\\assets\\scripts\\carcontroller2.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{AFD9A432-9D4F-09C0-C050-0331C6107FD6}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\carcontroller2.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
@@ -32,7 +32,7 @@
               "RelativeDocumentMoniker": "Assets\\Scripts\\QLearn.cs",
               "ToolTip": "C:\\Users\\szymm\\Documents\\iwium\\qlearning-car-unity\\DeliveryMaster\\Assets\\Scripts\\QLearn.cs",
               "RelativeToolTip": "Assets\\Scripts\\QLearn.cs",
-              "ViewState": "AgIAAHkAAAAAAAAAAADwv4YAAAAaAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAYAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-06-02T09:04:21.411Z",
               "EditorCaption": ""
@@ -47,8 +47,7 @@
               "RelativeToolTip": "Assets\\Scripts\\CarControllerNPC.cs",
               "ViewState": "AgIAAB0BAAAAAAAAAAAAADUBAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-02T08:09:45.563Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-02T08:09:45.563Z"
             },
             {
               "$type": "Document",
@@ -60,8 +59,7 @@
               "RelativeToolTip": "Assets\\Scripts\\CarController2.cs",
               "ViewState": "AgIAADsAAAAAAAAAAAAAwEgAAABBAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-06-02T08:09:17.901Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-06-02T08:09:17.901Z"
             }
           ]
         }
