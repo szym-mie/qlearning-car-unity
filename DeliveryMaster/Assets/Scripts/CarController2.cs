@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Unity.Mathematics;
 using UnityEngine;
 
 public class CarController2 : MonoBehaviour
@@ -27,10 +28,12 @@ public class CarController2 : MonoBehaviour
     [SerializeField] private LayerMask obstacleMask = ~0;
     [SerializeField] private float detectionDistance = 4f;
     [SerializeField] private float rayHeightOffset = 0.5f;
-    [SerializeField] private float rayForwardOffset = 3f;
+    [SerializeField] private float rayFwdOffset = 3f;
     [Tooltip("Boczne odsunięcie promieni od osi auta (≈ pół szerokości auta).")]
     [SerializeField] private float raySideOffset = 1f;
-    [SerializeField] private float rayDirOffset = 5f;
+    [SerializeField] private float rayDirFwd = 25f;
+    [SerializeField] private float rayDirSide = 75f;
+
 
     [Header("Stuck recovery")]
     [SerializeField] private float stuckSpeedThreshold = 0.5f;
@@ -57,9 +60,13 @@ public class CarController2 : MonoBehaviour
     [SerializeField] private Transform rearLeftWheelTransform;
     [SerializeField] private Transform rearRightWheelTransform;
 
+    [SerializeField] private bool shouldPrintReward = false;
+    [SerializeField] private int printRewardEvery = 10;
+
     private Waypoint currentTarget;
     private Waypoint previousTarget;
     private float steerInput;
+    private float steerAngle;
     private bool obstacleAhead;
 
     private float stuckTimer;
@@ -82,6 +89,19 @@ public class CarController2 : MonoBehaviour
     private bool isAgentActive;
     private Vector2 agentZeroPoint; // punkt zerowy ukladu wsporzednych dla qlearn
     private Vector3 agentInitPosition; // punkt do teleportacji samochodu po probie
+    private readonly bool nonMarkovianActions = false; // wygładzone sterowanie
+
+    // tymczasowe
+    private Quaternion senseDistFwdLRotation;
+    private Quaternion senseDistFwdRRotation;
+    private Quaternion senseDistSideLRotation;
+    private Quaternion senseDistSideRRotation;
+    private Vector3 senseDistCentOffset;
+    private Vector3 senseDistFwdLOffset;
+    private Vector3 senseDistFwdROffset;
+    private Vector3 senseDistSideLOffset;
+    private Vector3 senseDistSideROffset;
+
 
     private void Start()
     {
@@ -92,14 +112,24 @@ public class CarController2 : MonoBehaviour
         RerollStuckThreshold();
 
         // inicjalizacja agenta
-        int[] bins = new int[6] { 1, 1, 1, 1, 5, 5 };
-        //int[] bins = new int[6] { 5, 15, 5, 5, 5, 5 };
+        //int[] bins = new int[] { 1, 1, 1, 1, 7, 7, 7, 3, 3 };
+        int[] bins = new int[] { 1, 1, 1, 1, 1, 4, 4, 2, 2 };
         int actionCount = Enum.GetNames(typeof(Action)).Length;
-        learner = new QLearner(bins, actionCount, 0.1f, 0.98f, 1f, 2f);
-        agentLastState = new State { x = 0, y = 0, dir = 0, vel = 0, distL = 1, distR = 1 };
+        learner = new QLearner(bins, actionCount, 0.2f, 0.98f, 1f, 0.2f, +10f, +5f);
+        agentLastState = new State { x = 0, y = 0, dir = 0, vel = 0 };
         agentLastObservation = new Observation { };
         agentRewardMax = 0f;
         agentRewardMin = 500f; // TODO zmien na jakas sensowniejsza wartosc
+
+        senseDistFwdLRotation = Quaternion.AngleAxis(-rayDirFwd, Vector3.up);
+        senseDistFwdRRotation = Quaternion.AngleAxis(+rayDirFwd, Vector3.up);
+        senseDistSideLRotation = Quaternion.AngleAxis(-rayDirSide, Vector3.up);
+        senseDistSideRRotation = Quaternion.AngleAxis(+rayDirSide, Vector3.up);
+        senseDistCentOffset = new(0f, rayHeightOffset, rayFwdOffset);
+        senseDistFwdLOffset = new(-raySideOffset, rayHeightOffset, rayFwdOffset);
+        senseDistFwdROffset = new(+raySideOffset, rayHeightOffset, rayFwdOffset);
+        senseDistSideLOffset = new(-raySideOffset, rayHeightOffset, rayFwdOffset);
+        senseDistSideROffset = new(+raySideOffset, rayHeightOffset, rayFwdOffset);
     }
 
     private void RerollStuckThreshold()
@@ -178,7 +208,6 @@ public class CarController2 : MonoBehaviour
         return distance;
     }
 
-
     private Observation MakeObservation() 
     {
         Vector2 worldPosition;
@@ -192,24 +221,27 @@ public class CarController2 : MonoBehaviour
         }
         float vel = rb.linearVelocity.magnitude;
 
-        Quaternion senseDistLRotation = Quaternion.AngleAxis(-rayDirOffset, Vector3.up);
-        Quaternion senseDistRRotation = Quaternion.AngleAxis(+rayDirOffset, Vector3.up);
-        Vector3 senseDistLOffset = new(-raySideOffset, rayHeightOffset, rayForwardOffset);
-        Vector3 senseDistROffset = new(+raySideOffset, rayHeightOffset, rayForwardOffset);
-        float distL = SenseDist(senseDistLRotation, senseDistLOffset, 20f);
-        float distR = SenseDist(senseDistRRotation, senseDistROffset, 20f);
+        float distCent = SenseDist(Quaternion.identity, senseDistCentOffset, learner.distFwdMax);
+        float distFwdL = SenseDist(senseDistFwdLRotation, senseDistFwdLOffset, learner.distFwdMax);
+        float distFwdR = SenseDist(senseDistFwdRRotation, senseDistFwdROffset, learner.distFwdMax);
+        float distSideL = SenseDist(senseDistSideLRotation, senseDistSideLOffset, learner.distSideMax);
+        float distSideR = SenseDist(senseDistSideRRotation, senseDistSideROffset, learner.distSideMax);
+
         return new Observation 
         { 
             x = localPosition.x, 
             y = localPosition.y, 
             dir = dir,
             vel = vel, 
-            distL = distL, 
-            distR = distR 
+            distCent = distCent,
+            distFwdL = distFwdL, 
+            distFwdR = distFwdR,
+            distSideL = distSideL,
+            distSideR = distSideR
         };
     }
 
-    private float GetReward1(Observation observation)
+    private float GetReward1(Action action, Observation observation)
     {
         float x = observation.x;
         // nie wyjezdzaj poza droge
@@ -224,8 +256,8 @@ public class CarController2 : MonoBehaviour
             return dy * 100;
         }
         // im blizszy dystans tym gorsza nagroda
-        float distL = observation.distL / 5f;
-        float distR = observation.distR / 5f;
+        float distL = observation.distFwdL / 5f;
+        float distR = observation.distFwdR / 5f;
         float distMin = Mathf.Min(distL, distR);
         // przed przeszkoda dawaj punkty jazde w lewo a po przeszkodzie - w prawo
         float dirMult = 1f;
@@ -243,51 +275,40 @@ public class CarController2 : MonoBehaviour
         return dy * distMin * dirMult;
     }
 
-    private float GetReward2(Observation observation)
+    private float GetReward3(Action action, Observation observation)
     {
-        float x = observation.x;
-        // nie wyjezdzaj poza droge
-        if (Mathf.Abs(x) > 3)
-        {
-            return 0f;
-        }
         float y = observation.y;
         float dy = y - agentLastObservation.y;
-        // wiecej nagrod za poradzenie sobie z przeszkoda
-        if (y > 12f)
-        {
-            return dy * 100;
-        }
-        // im blizszy dystans tym gorsza nagroda
-        //float distL = observation.distL / 5f;
-        //float distR = observation.distR / 5f;
-        //float distMin = Mathf.Min(distL, distR);
-        // przed przeszkoda dawaj punkty jazde w lewo a po przeszkodzie - w prawo
-        if (y < 6f)
-        {
-            //float dirDiff = (dir - 20f) * 4f;
-            //dirMult += Mathf.Cos(dirDiff) * 0.5f;
-        }
-        if (y > 8f)
-        {
-            //float dirDiff = (dir + 20f) * 4f;
-            //dirMult += Mathf.Cos(dirDiff) * 0.5f;
-        }
-        return dy;// * distMin;
+        float dDistCent = observation.distCent - agentLastObservation.distCent;
+        float dDistFwdL = observation.distFwdL - agentLastObservation.distFwdL;
+        float dDistFwdR = observation.distFwdR - agentLastObservation.distFwdR;
+        float dDistSideL = observation.distSideL - agentLastObservation.distSideL;
+        float dDistSideR = observation.distSideR - agentLastObservation.distSideR;
+        float reward = dy;
+        float maxFwdDist = Math.Max(observation.distFwdL, observation.distFwdR);
+        float steer = (observation.distFwdR - observation.distFwdL) / maxFwdDist;
+        if (steer < -0.01f && action == Action.DRIVE_LEFT) reward *= 2f;
+        if (steer > +0.01f && action == Action.DRIVE_RIGHT) reward *= 2f;
+        reward += dDistCent;
+        reward += dDistFwdL;
+        reward += dDistFwdR;
+        reward += dDistSideL;
+        reward += dDistSideR;
+        return reward;
     }
 
     private float ShouldAgentRepeat(Observation observation)
     {
         // inne testy np. OnCollisionEnter nie powiodly sie
-        if (agentEndPreCond) { return -100f; }
+        if (agentEndPreCond) return -100f;
         // kiedy zblizymy sie za bardzo do przeszkody
-        if (observation.distL < 1f || observation.distR < 1f) { return -100f; }
+        if (observation.distFwdL < 1f || observation.distFwdR < 1f) return -100f;
+        if (observation.distSideL < 1f || observation.distSideR < 1f) return -100f;
         // TODO kiedy wyjedziemy gdzies poza obszar srodowiska
         // jezeli agent jedzie bardzo wolno, odpal czasomierz
         float vel = observation.vel;
         if (vel < 0.5f && !isAgentStuck)
         {
-            Debug.Log("agent stuck");
             isAgentStuck = true;
             agentStuckTimer = 0f;
         }
@@ -299,16 +320,15 @@ public class CarController2 : MonoBehaviour
             // to powinno wystarczyc aby uniknac cyklu przyspieszam-hamuje
             if (vel > 2.0f) { 
                 isAgentStuck = false;
-                Debug.Log("agent got unstuck");
             }
             //if (vel > 0.5f) { agentStuckTimer -= Time.deltaTime * 2; }
             // jezeli sie slimaczy za dlugo to koniec
-            if (agentStuckTimer > 1f) { return -100f; }
+            if (agentStuckTimer > 1f) return -100f;
         }
         // TODO kiedy agentowi sie uda :)
-        if (observation.y > 20f) {  return 100f; }
+        if (observation.y > 20f) return 100f;
         // kiedy wypdanie poza swiat
-        if (transform.position.y < -10f) { return -100f; }
+        if (transform.position.y < -10f) return -100f;
         return 0f;
     }
 
@@ -320,14 +340,12 @@ public class CarController2 : MonoBehaviour
         {
             agentRewardSum += endReward;
             Debug.Log($"Attempt {agentAttemptCount}: y = {newObservation.y}, reward = {agentRewardSum}, epsilon = {learner.epsilon}");
-
             UpdateAfterAgentAttempt();
-            // TODO: przestan probowac po zadanej liczb prob
             ReinitAgent();
         }
         else
         {
-            float reward = GetReward2(newObservation);
+            float reward = GetReward3(agentAction, newObservation);
             agentRewardSum += reward;
             State newState = learner.Discretise(newObservation);
             learner.UpdateKnowledge(agentLastState, agentAction, newState, reward);
@@ -342,10 +360,9 @@ public class CarController2 : MonoBehaviour
         agentAttemptCount++;
         agentRewardMax = Mathf.Max(agentRewardMax, agentRewardSum);
         agentRewardMin = Mathf.Min(agentRewardMin, agentRewardSum);
-        if (agentAttemptCount > 50)
-        {
-            learner.epsilon *= 0.99f;
-        }
+
+        if (agentAttemptCount > 10) learner.epsilon *= 0.9f;
+        if (learner.epsilon < 0.05) learner.epsilon = 0f;
     }
 
     private void ReinitAgent()
@@ -353,7 +370,6 @@ public class CarController2 : MonoBehaviour
         agentRewardSum = 0f;
         agentEndPreCond = false;
         transform.position = agentInitPosition;
-        //float dir = UnityEngine.Random.value * -20.0f;
         float dir = 0f;
         transform.rotation = Quaternion.AngleAxis(dir, Vector3.up);
         rb.linearVelocity = Vector3.zero;
@@ -465,7 +481,7 @@ public class CarController2 : MonoBehaviour
     {
         Vector3 forward = transform.forward;
         Vector3 right = transform.right;
-        Vector3 baseOrigin = transform.position + forward * rayForwardOffset + Vector3.up * rayHeightOffset;
+        Vector3 baseOrigin = transform.position + forward * rayFwdOffset + Vector3.up * rayHeightOffset;
         Vector3 leftOrigin = baseOrigin - right * raySideOffset;
         Vector3 rightOrigin = baseOrigin + right * raySideOffset;
 
@@ -522,28 +538,36 @@ public class CarController2 : MonoBehaviour
 
     private void HandleSteering()
     {
-        float currentSteerAngle;
+        float targetSteerAngle;
         if (isAgentActive)
         {
+            // agent obsluguje kierownice
             float agentSteerInput = 0f;
-            // agent obsluguje pedaly gazu i hamulca
-            if (agentAction == Action.DRIVE_LEFT)
-            {
-                agentSteerInput = -1f;
-            }
-            if (agentAction == Action.DRIVE_RIGHT)
-            {
-                agentSteerInput = +1f;
-            }
-            currentSteerAngle = maxSteerAngle * agentSteerInput;
+            if (agentAction == Action.DRIVE_LEFT) agentSteerInput = -1f;
+            if (agentAction == Action.DRIVE_RIGHT) agentSteerInput = +1f;
+            targetSteerAngle = maxSteerAngle * agentSteerInput;
         }
         else
         {
             float effectiveSteer = isReversing ? 0f : steerInput;
-            currentSteerAngle = maxSteerAngle * effectiveSteer;
+            targetSteerAngle = maxSteerAngle * effectiveSteer;
         }
-        frontLeftWheelCollider.steerAngle = currentSteerAngle;
-        frontRightWheelCollider.steerAngle = currentSteerAngle;
+        if (nonMarkovianActions)
+        {
+            float epsilon = 1f * Time.fixedDeltaTime;
+            float steerAngleRate = 120f * Time.fixedDeltaTime;
+            float steerError = targetSteerAngle - steerAngle;
+            float steerErrorAbs = math.abs(steerError);
+            if (steerError > -epsilon && steerError < +epsilon) steerAngle = targetSteerAngle;
+            if (steerError < 0f) steerAngle -= math.min(steerAngleRate, steerErrorAbs);
+            if (steerError > 0f) steerAngle += math.min(steerAngleRate, steerErrorAbs);
+        }
+        else
+        {
+            steerAngle = targetSteerAngle;
+        }
+        frontLeftWheelCollider.steerAngle = steerAngle;
+        frontRightWheelCollider.steerAngle = steerAngle;
     }
 
     private void LimitSpeed()

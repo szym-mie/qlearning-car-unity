@@ -1,5 +1,6 @@
 using Unity.Collections;
 using Unity.Mathematics;
+using UnityEngine;
 
 public struct State
 {
@@ -8,8 +9,13 @@ public struct State
     public int y; // y > 0.0 -> samochod pojechal do przodu
     public int dir; // dir > 0.0 -> obrocony w prawo, dir < 0.0 -> obrocony w lewo
     public int vel; // predkosc samochodu do przodu
-    public int distL; // dystans do przeszkody - czujnik z lewej strony pojazdu
-    public int distR; // dystans do przeszkody - czujnik z prawej strony pojazdu
+    // czujniki patrz¹ce do przodu
+    public int distCent; // dystans do przeszkody - czujnik poœrodku pojazdu
+    public int distFwdL; // dystans do przeszkody - czujnik z lewej strony pojazdu
+    public int distFwdR; // dystans do przeszkody - czujnik z prawej strony pojazdu
+    // czujniki patrz¹ce na bok
+    public int distSideL; // dystans do przeszkody - czujnik z lewej strony pojazdu
+    public int distSideR; // dystans do przeszkody - czujnik z prawej strony pojazdu
 }
 
 public struct Observation
@@ -19,8 +25,11 @@ public struct Observation
     public float y;
     public float dir;
     public float vel;
-    public float distL;
-    public float distR;
+    public float distCent;
+    public float distFwdL;
+    public float distFwdR;
+    public float distSideL;
+    public float distSideR;
 }
 
 public enum Action
@@ -32,18 +41,6 @@ public enum Action
     //REVERSE = 4
 }
 
-/* How To Learn
-
-Attempt {
-    State state = learner.Discretise(observation);
-    int action = learner.PickAction(state);
-    // OBSERVE THE ENVIRONMENT
-    // basically get nextState, reward
-    learner.UpdateKnowledge(state, action, nextState, reward);
-}
-
- */
-
 public class QLearner
 {
     public float alpha;
@@ -54,7 +51,10 @@ public class QLearner
     private readonly int actionCount;
     private readonly float gamma;
 
-    private NativeArray<float> q;
+    public readonly float distFwdMax;
+    public readonly float distSideMax;
+
+    public NativeArray<float> q;
 
     public QLearner(
         int[] bins,
@@ -62,7 +62,9 @@ public class QLearner
         float alpha,
         float gamma,
         float epsilon,
-        float actionChangeThreshold)
+        float actionChangeThreshold,
+        float distFwdMax,
+        float distSideMax)
     {
         this.bins = bins;
         this.actionCount = actionCount;
@@ -71,20 +73,18 @@ public class QLearner
         this.gamma = gamma;
         this.epsilon = epsilon;
         this.actionChangeThreshold = actionChangeThreshold;
+        //this.actionChangeTemporalDelay = actionChangeTemporalDelay;
 
         int qSize = actionCount;
-        foreach (int bin in bins)
-        {
-            qSize *= bin;
-        }
-
+        foreach (int bin in bins) qSize *= bin;
         q = new NativeArray<float>(qSize, Allocator.Persistent, NativeArrayOptions.ClearMemory);
+        this.distFwdMax = distFwdMax;
+        this.distSideMax = distSideMax;
     }
 
     public void Dispose()
     {
-        if (q.IsCreated)
-            q.Dispose();
+        if (q.IsCreated) q.Dispose();
     }
 
     private int QIndex(State s, int action)
@@ -97,9 +97,15 @@ public class QLearner
         idxAcc *= bins[3];
         idxAcc += s.dir;
         idxAcc *= bins[4];
-        idxAcc += s.distL;
+        idxAcc += s.distCent;
         idxAcc *= bins[5];
-        idxAcc += s.distR;
+        idxAcc += s.distFwdL;
+        idxAcc *= bins[6];
+        idxAcc += s.distFwdR;
+        idxAcc *= bins[7];
+        idxAcc += s.distSideL;
+        idxAcc *= bins[8];
+        idxAcc += s.distSideR;
         idxAcc *= actionCount;
         return idxAcc + action;
     }
@@ -112,8 +118,11 @@ public class QLearner
             y = Digitize(observation.y, -1.0f, +15.0f, bins[1]),
             dir = Digitize(observation.dir, -40.0f, +40.0f, bins[2]),
             vel = Digitize(observation.vel, -1.0f, +3.0f, bins[3]),
-            distL = Digitize(observation.distL, +0.0f, +10.0f, bins[4]),
-            distR = Digitize(observation.distR, +0.0f, +10.0f, bins[5])
+            distCent = Digitize(observation.distCent, +0.0f, distFwdMax, bins[4]),
+            distFwdL = Digitize(observation.distFwdL, +0.0f, distFwdMax, bins[5]),
+            distFwdR = Digitize(observation.distFwdR, +0.0f, distFwdMax, bins[6]),
+            distSideL = Digitize(observation.distSideL, +0.0f, distSideMax, bins[7]),
+            distSideR = Digitize(observation.distSideR, +0.0f, distSideMax, bins[8])
         };
     }
 
