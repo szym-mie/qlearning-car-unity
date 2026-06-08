@@ -7,8 +7,8 @@ public struct State
     // pozycje x, y sa w odniesieniu od startu manewru
     public int x; // x > 0.0 -> samochod po prawej stronie, x < 0.0 -> samochod po lewej stronie
     public int y; // y > 0.0 -> samochod pojechal do przodu
-    public int dir; // dir > 0.0 -> obrocony w prawo, dir < 0.0 -> obrocony w lewo
     public int vel; // predkosc samochodu do przodu
+    public int angle; // angle > 0.0 -> obrocony w prawo, angle < 0.0 -> obrocony w lewo
     // czujniki patrz¹ce do przodu
     public int distCent; // dystans do przeszkody - czujnik poœrodku pojazdu
     public int distFwdL; // dystans do przeszkody - czujnik z lewej strony pojazdu
@@ -23,8 +23,8 @@ public struct Observation
     // opis pol identyczny jak dla State, tylko nie-dyskretny
     public float x;
     public float y;
-    public float dir;
     public float vel;
+    public float angle;
     public float distCent;
     public float distFwdL;
     public float distFwdR;
@@ -32,13 +32,18 @@ public struct Observation
     public float distSideR;
 }
 
-public enum Action
+public enum AngleAction
 {
-    DRIVE_FWD = 0,
-    DRIVE_LEFT = 1, 
-    DRIVE_RIGHT = 2,
-    //IDLE = 3,
-    //REVERSE = 4
+    DRIVE_F = 0,
+    DRIVE_L = 1, 
+    DRIVE_R = 2,
+}
+
+public enum CommandAction
+{
+    DRIVE = 0,
+    STEER_L = 1,
+    STEER_R = 2,
 }
 
 public class QLearner
@@ -87,7 +92,7 @@ public class QLearner
         if (q.IsCreated) q.Dispose();
     }
 
-    private int QIndex(State s, int action)
+    private int QIndex(State s, int actionIdx)
     {
         int idxAcc = s.x;
         idxAcc *= bins[1];
@@ -95,7 +100,7 @@ public class QLearner
         idxAcc *= bins[2];
         idxAcc += s.vel;
         idxAcc *= bins[3];
-        idxAcc += s.dir;
+        idxAcc += s.angle;
         idxAcc *= bins[4];
         idxAcc += s.distCent;
         idxAcc *= bins[5];
@@ -107,7 +112,7 @@ public class QLearner
         idxAcc *= bins[8];
         idxAcc += s.distSideR;
         idxAcc *= actionCount;
-        return idxAcc + action;
+        return idxAcc + actionIdx;
     }
 
     public State Discretise(Observation observation)
@@ -116,8 +121,8 @@ public class QLearner
         {
             x = Digitize(observation.x, -2.5f, +2.5f, bins[0]),
             y = Digitize(observation.y, -1.0f, +15.0f, bins[1]),
-            dir = Digitize(observation.dir, -40.0f, +40.0f, bins[2]),
             vel = Digitize(observation.vel, -1.0f, +3.0f, bins[3]),
+            angle = Digitize(observation.angle, -30.0f, +30.0f, bins[2]),
             distCent = Digitize(observation.distCent, +0.0f, distFwdMax, bins[4]),
             distFwdL = Digitize(observation.distFwdL, +0.0f, distFwdMax, bins[5]),
             distFwdR = Digitize(observation.distFwdR, +0.0f, distFwdMax, bins[6]),
@@ -137,34 +142,34 @@ public class QLearner
         return math.clamp(idx, 0, binCount - 1);
     }
 
-    public Action PickAction(Action currentAction, State state)
+    public int PickAction(int currentAction, State state)
     {
         if (UnityEngine.Random.value < epsilon)
-            return (Action)UnityEngine.Random.Range(0, actionCount);
+            return UnityEngine.Random.Range(0, actionCount);
 
         float qNew = float.NegativeInfinity;
-        int newActionNdx = 0;
-        int currentActionNdx = (int)currentAction;
-        float qCurrent = q[QIndex(state, currentActionNdx)];
+        int newActionIdx = 0;
+        int currentActionIdx = (int)currentAction;
+        float qCurrent = q[QIndex(state, currentActionIdx)];
         for (int a = 0; a < actionCount; a++)
         {
             float qAction = q[QIndex(state, a)];
             if (qAction > qNew)
             {
                 qNew = qAction;
-                newActionNdx = a;
+                newActionIdx = a;
             }
         }
 
         if (qNew > qCurrent + this.actionChangeThreshold) {
-            return (Action)newActionNdx;
+            return newActionIdx;
         }
-        return (Action)currentActionNdx;
+        return currentActionIdx;
     }
 
     public void UpdateKnowledge(
         State state,
-        Action action,
+        int actionIdx,
         State nextState,
         float reward)
     {
@@ -174,7 +179,7 @@ public class QLearner
             maxFutureQ = math.max(maxFutureQ, q[QIndex(nextState, a)]);
         }
 
-        int idx = QIndex(state, (int)action);
+        int idx = QIndex(state, actionIdx);
         float currentQ = q[idx];
         float target = reward + gamma * maxFutureQ;
         q[idx] = (1f - alpha) * currentQ + alpha * target;

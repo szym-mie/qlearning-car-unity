@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Unity.Mathematics;
 using UnityEngine;
 
-public class CarController2 : MonoBehaviour
+public class CarController3 : MonoBehaviour
 {
     private Rigidbody rb;
 
@@ -85,7 +85,7 @@ public class CarController2 : MonoBehaviour
     private bool agentEndPreCond = false;
     private bool isAgentStuck;
     private float agentStuckTimer;
-    private AngleAction agentAction;
+    private CommandAction agentAction;
     private bool isAgentActive;
     private Vector2 agentZeroPoint; // punkt zerowy ukladu wsporzednych dla qlearn
     private Vector3 agentInitPosition; // punkt do teleportacji samochodu po probie
@@ -112,7 +112,7 @@ public class CarController2 : MonoBehaviour
 
         // inicjalizacja agenta
         //int[] bins = new int[] { 1, 1, 1, 1, 7, 7, 7, 3, 3 };
-        int[] bins = new int[] { 1, 1, 1, 1, 1, 4, 4, 2, 2 };
+        int[] bins = new int[] { 1, 1, 5, 1, 1, 6, 6, 2, 2 };
         int actionCount = Enum.GetNames(typeof(AngleAction)).Length;
         learner = new QLearner(bins, actionCount, 0.2f, 0.98f, 1f, 0.2f, +10f, +5f);
         agentLastState = new State { x = 0, y = 0, angle = 0, vel = 0 };
@@ -213,11 +213,6 @@ public class CarController2 : MonoBehaviour
         worldPosition.x = transform.position.x;
         worldPosition.y = transform.position.z;
         Vector2 localPosition = worldPosition - agentZeroPoint;
-        float dir = rb.rotation.eulerAngles.y;
-        if (dir >= 180f) {
-            // normalizacja do zakresu (-180, +180)
-            dir -= 360f;
-        }
         float vel = rb.linearVelocity.magnitude;
 
         float distCent = SenseDist(Quaternion.identity, senseDistCentOffset, learner.distFwdMax);
@@ -230,7 +225,7 @@ public class CarController2 : MonoBehaviour
         { 
             x = localPosition.x, 
             y = localPosition.y, 
-            angle = dir,
+            angle = steerAngle,
             vel = vel, 
             distCent = distCent,
             distFwdL = distFwdL, 
@@ -240,41 +235,7 @@ public class CarController2 : MonoBehaviour
         };
     }
 
-    private float GetReward1(AngleAction action, Observation observation)
-    {
-        float x = observation.x;
-        // nie wyjezdzaj poza droge
-        if (Mathf.Abs(x) > 3)
-        {
-            return 0f;
-        }
-        float y = observation.y;
-        float dy = y - agentLastObservation.y;
-        // wiecej nagrod za poradzenie sobie z przeszkoda
-        if (y > 12f) {
-            return dy * 100;
-        }
-        // im blizszy dystans tym gorsza nagroda
-        float distL = observation.distFwdL / 5f;
-        float distR = observation.distFwdR / 5f;
-        float distMin = Mathf.Min(distL, distR);
-        // przed przeszkoda dawaj punkty jazde w lewo a po przeszkodzie - w prawo
-        float dirMult = 1f;
-        float dir = observation.angle;
-        if (y < 6f)
-        {
-            float dirDiff = (dir - 20f) * 4f;
-            dirMult += Mathf.Cos(dirDiff) * 0.5f;
-        }
-        if (y > 8f)
-        {
-            float dirDiff = (dir + 20f) * 4f;
-            dirMult += Mathf.Cos(dirDiff) * 0.5f;
-        }
-        return dy * distMin * dirMult;
-    }
-
-    private float GetReward3(AngleAction action, Observation observation)
+    private float GetReward3(CommandAction action, Observation observation)
     {
         float y = observation.y;
         float dy = y - agentLastObservation.y;
@@ -287,8 +248,8 @@ public class CarController2 : MonoBehaviour
         float maxFwdDist = Math.Max(observation.distFwdL, observation.distFwdR);
         // w ktora strone uciec aby nie przywalic w przeszkode
         float collision = (observation.distFwdR - observation.distFwdL) / maxFwdDist;
-        if (collision < -0.01f && action == AngleAction.DRIVE_L) reward *= 2f;
-        if (collision > +0.01f && action == AngleAction.DRIVE_R) reward *= 2f;
+        if (collision < -0.01f && observation.angle < -1f) reward *= 2f;
+        if (collision > +0.01f && observation.angle > +1f) reward *= 2f;
         reward += dDistCent;
         reward += dDistFwdL;
         reward += dDistFwdR;
@@ -323,7 +284,7 @@ public class CarController2 : MonoBehaviour
             }
             //if (vel > 0.5f) { agentStuckTimer -= Time.deltaTime * 2; }
             // jezeli sie slimaczy za dlugo to koniec
-            if (agentStuckTimer > 1f) return -500f;
+            if (agentStuckTimer > 1f) return -100f;
         }
         // TODO kiedy agentowi sie uda :)
         if (observation.y > 20f) return 100f;
@@ -350,7 +311,7 @@ public class CarController2 : MonoBehaviour
             State newState = learner.Discretise(newObservation);
             int actionIdx = (int)agentAction;
             learner.UpdateKnowledge(agentLastState, actionIdx, newState, reward);
-            agentAction = (AngleAction)learner.PickAction(actionIdx, agentLastState);
+            agentAction = (CommandAction)learner.PickAction(actionIdx, agentLastState);
             agentLastState = newState;
             agentLastObservation = newObservation;
         }
@@ -362,7 +323,7 @@ public class CarController2 : MonoBehaviour
         agentRewardMax = Mathf.Max(agentRewardMax, agentRewardSum);
         agentRewardMin = Mathf.Min(agentRewardMin, agentRewardSum);
 
-        if (agentAttemptCount > 10) learner.epsilon *= 0.9f;
+        if (agentAttemptCount > 10) learner.epsilon *= 0.95f;
         if (learner.epsilon < 0.05) learner.epsilon = 0f;
     }
 
@@ -375,6 +336,8 @@ public class CarController2 : MonoBehaviour
         transform.rotation = Quaternion.AngleAxis(dir, Vector3.up);
         rb.linearVelocity = Vector3.zero;
         rb.rotation = Quaternion.identity;
+        steerAngle = 0f;
+        if (learner.epsilon > 0.4f) steerAngle = UnityEngine.Random.value * -25f;
         agentLastObservation = MakeObservation();
         isAgentStuck = false;
         agentStuckTimer = 0f;
@@ -506,15 +469,20 @@ public class CarController2 : MonoBehaviour
         else if (isAgentActive)
         {
             // agent obsluguje pedaly gazu i hamulca
-            if (agentAction == AngleAction.DRIVE_L || agentAction == AngleAction.DRIVE_R || agentAction == AngleAction.DRIVE_F)
+            if (agentAction == CommandAction.DRIVE)
             {
-                torque = motorForce;
+                torque = 1.0f * motorForce;
                 brake = 0f;
             }
+            else if (agentAction == CommandAction.STEER_L || agentAction == CommandAction.STEER_R)
+            {
+                torque = 0.4f * motorForce;
+                brake = 0f;
+            } 
             else
             {
                 torque = 0f;
-                brake = brakeForce;
+                brake = 0f;
             }
         }
         else if (obstacleAhead)
@@ -544,8 +512,8 @@ public class CarController2 : MonoBehaviour
         {
             // agent obsluguje kierownice
             float agentSteerInput = 0f;
-            if (agentAction == AngleAction.DRIVE_L) agentSteerInput = -1f;
-            if (agentAction == AngleAction.DRIVE_R) agentSteerInput = +1f;
+            if (agentAction == CommandAction.STEER_L) agentSteerInput = -1f;
+            if (agentAction == CommandAction.STEER_R) agentSteerInput = +1f;
             targetSteerAngle = maxSteerAngle * agentSteerInput;
         }
         else
@@ -554,8 +522,13 @@ public class CarController2 : MonoBehaviour
             targetSteerAngle = maxSteerAngle * effectiveSteer;
         }
 
-        // proste sterowanie
-        steerAngle = targetSteerAngle;
+        float epsilon = 1f * Time.fixedDeltaTime;
+        float steerAngleRate = 120f * Time.fixedDeltaTime;
+        float steerError = targetSteerAngle - steerAngle;
+        float steerErrorAbs = math.abs(steerError);
+        if (steerError > -epsilon && steerError < +epsilon) steerAngle = targetSteerAngle;
+        if (steerError < 0f) steerAngle -= math.min(steerAngleRate, steerErrorAbs);
+        if (steerError > 0f) steerAngle += math.min(steerAngleRate, steerErrorAbs);        
         frontLeftWheelCollider.steerAngle = steerAngle;
         frontRightWheelCollider.steerAngle = steerAngle;
     }
