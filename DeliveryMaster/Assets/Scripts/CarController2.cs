@@ -92,10 +92,10 @@ public class CarController2 : MonoBehaviour
         RerollStuckThreshold();
 
         // inicjalizacja agenta
-        int[] bins = new int[6] { 1, 15, 5, 1, 5, 5 };
+        int[] bins = new int[6] { 1, 1, 1, 1, 5, 5 };
         //int[] bins = new int[6] { 5, 15, 5, 5, 5, 5 };
         int actionCount = Enum.GetNames(typeof(Action)).Length;
-        learner = new QLearner(bins, actionCount, 0.1f, 0.98f, 1f);
+        learner = new QLearner(bins, actionCount, 0.1f, 0.98f, 1f, 2f);
         agentLastState = new State { x = 0, y = 0, dir = 0, vel = 0, distL = 1, distR = 1 };
         agentLastObservation = new Observation { };
         agentRewardMax = 0f;
@@ -209,7 +209,7 @@ public class CarController2 : MonoBehaviour
         };
     }
 
-    private float GetReward(Observation observation)
+    private float GetReward1(Observation observation)
     {
         float x = observation.x;
         // nie wyjezdzaj poza droge
@@ -243,12 +243,45 @@ public class CarController2 : MonoBehaviour
         return dy * distMin * dirMult;
     }
 
-    private bool ShouldAgentRepeat(Observation observation)
+    private float GetReward2(Observation observation)
+    {
+        float x = observation.x;
+        // nie wyjezdzaj poza droge
+        if (Mathf.Abs(x) > 3)
+        {
+            return 0f;
+        }
+        float y = observation.y;
+        float dy = y - agentLastObservation.y;
+        // wiecej nagrod za poradzenie sobie z przeszkoda
+        if (y > 12f)
+        {
+            return dy * 100;
+        }
+        // im blizszy dystans tym gorsza nagroda
+        //float distL = observation.distL / 5f;
+        //float distR = observation.distR / 5f;
+        //float distMin = Mathf.Min(distL, distR);
+        // przed przeszkoda dawaj punkty jazde w lewo a po przeszkodzie - w prawo
+        if (y < 6f)
+        {
+            //float dirDiff = (dir - 20f) * 4f;
+            //dirMult += Mathf.Cos(dirDiff) * 0.5f;
+        }
+        if (y > 8f)
+        {
+            //float dirDiff = (dir + 20f) * 4f;
+            //dirMult += Mathf.Cos(dirDiff) * 0.5f;
+        }
+        return dy;// * distMin;
+    }
+
+    private float ShouldAgentRepeat(Observation observation)
     {
         // inne testy np. OnCollisionEnter nie powiodly sie
-        if (agentEndPreCond) { return true; }
+        if (agentEndPreCond) { return -100f; }
         // kiedy zblizymy sie za bardzo do przeszkody
-        if (observation.distL < 1f || observation.distR < 1f) { return true; }
+        if (observation.distL < 1f || observation.distR < 1f) { return -100f; }
         // TODO kiedy wyjedziemy gdzies poza obszar srodowiska
         // jezeli agent jedzie bardzo wolno, odpal czasomierz
         float vel = observation.vel;
@@ -270,18 +303,22 @@ public class CarController2 : MonoBehaviour
             }
             //if (vel > 0.5f) { agentStuckTimer -= Time.deltaTime * 2; }
             // jezeli sie slimaczy za dlugo to koniec
-            if (agentStuckTimer > 1f) { return true; }
+            if (agentStuckTimer > 1f) { return -100f; }
         }
         // TODO kiedy agentowi sie uda :)
-        if (observation.y > 20f) {  return true; }
-        return false;
+        if (observation.y > 20f) {  return 100f; }
+        // kiedy wypdanie poza swiat
+        if (transform.position.y < -10f) { return -100f; }
+        return 0f;
     }
 
     private void UpdateAgent()
     {
         Observation newObservation = MakeObservation();
-        if (ShouldAgentRepeat(newObservation)) 
+        float endReward = ShouldAgentRepeat(newObservation);
+        if (endReward != 0f) 
         {
+            agentRewardSum += endReward;
             Debug.Log($"Attempt {agentAttemptCount}: y = {newObservation.y}, reward = {agentRewardSum}, epsilon = {learner.epsilon}");
 
             UpdateAfterAgentAttempt();
@@ -290,11 +327,11 @@ public class CarController2 : MonoBehaviour
         }
         else
         {
-            float reward = GetReward(newObservation);
+            float reward = GetReward2(newObservation);
             agentRewardSum += reward;
             State newState = learner.Discretise(newObservation);
             learner.UpdateKnowledge(agentLastState, agentAction, newState, reward);
-            agentAction = learner.PickAction(agentLastState);
+            agentAction = learner.PickAction(agentAction, agentLastState);
             agentLastState = newState;
             agentLastObservation = newObservation;
         }
@@ -305,9 +342,9 @@ public class CarController2 : MonoBehaviour
         agentAttemptCount++;
         agentRewardMax = Mathf.Max(agentRewardMax, agentRewardSum);
         agentRewardMin = Mathf.Min(agentRewardMin, agentRewardSum);
-        if (agentAttemptCount > 150)
+        if (agentAttemptCount > 50)
         {
-            learner.epsilon *= 0.995f;
+            learner.epsilon *= 0.99f;
         }
     }
 
@@ -316,7 +353,10 @@ public class CarController2 : MonoBehaviour
         agentRewardSum = 0f;
         agentEndPreCond = false;
         transform.position = agentInitPosition;
-        transform.rotation = Quaternion.identity;
+        //float dir = UnityEngine.Random.value * -20.0f;
+        float dir = 0f;
+        transform.rotation = Quaternion.AngleAxis(dir, Vector3.up);
+        rb.linearVelocity = Vector3.zero;
         rb.rotation = Quaternion.identity;
         agentLastObservation = MakeObservation();
         isAgentStuck = false;
@@ -452,13 +492,6 @@ public class CarController2 : MonoBehaviour
             if (agentAction == Action.DRIVE_LEFT || agentAction == Action.DRIVE_RIGHT || agentAction == Action.DRIVE_FWD)
             {
                 torque = motorForce;
-                brake = 0f;
-            }
-            else if (agentAction == Action.REVERSE)
-            {
-                // TODO na razie bez cofania
-                torque = motorForce;
-                //torque = -motorForce * reverseTorqueMultiplier;
                 brake = 0f;
             }
             else

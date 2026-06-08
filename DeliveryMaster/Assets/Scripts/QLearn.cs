@@ -25,11 +25,11 @@ public struct Observation
 
 public enum Action
 {
-    IDLE = 0, 
+    DRIVE_FWD = 0,
     DRIVE_LEFT = 1, 
-    DRIVE_RIGHT = 2, 
-    DRIVE_FWD = 3,  
-    REVERSE = 4
+    DRIVE_RIGHT = 2,
+    //IDLE = 3,
+    //REVERSE = 4
 }
 
 /* How To Learn
@@ -48,6 +48,7 @@ public class QLearner
 {
     public float alpha;
     public float epsilon;
+    public float actionChangeThreshold;
 
     private readonly int[] bins;
     private readonly int actionCount;
@@ -60,7 +61,8 @@ public class QLearner
         int actionCount,
         float alpha,
         float gamma,
-        float epsilon)
+        float epsilon,
+        float actionChangeThreshold)
     {
         this.bins = bins;
         this.actionCount = actionCount;
@@ -68,6 +70,7 @@ public class QLearner
         this.alpha = alpha;
         this.gamma = gamma;
         this.epsilon = epsilon;
+        this.actionChangeThreshold = actionChangeThreshold;
 
         int qSize = actionCount;
         foreach (int bin in bins)
@@ -125,24 +128,29 @@ public class QLearner
         return math.clamp(idx, 0, binCount - 1);
     }
 
-    public Action PickAction(State state)
+    public Action PickAction(Action currentAction, State state)
     {
         if (UnityEngine.Random.value < epsilon)
             return (Action)UnityEngine.Random.Range(0, actionCount);
 
-        float bestQ = float.NegativeInfinity;
-        int bestAction = 0;
+        float qNew = float.NegativeInfinity;
+        int newActionNdx = 0;
+        int currentActionNdx = (int)currentAction;
+        float qCurrent = q[QIndex(state, currentActionNdx)];
         for (int a = 0; a < actionCount; a++)
         {
-            float qv = q[QIndex(state, a)];
-            if (qv > bestQ)
+            float qAction = q[QIndex(state, a)];
+            if (qAction > qNew)
             {
-                bestQ = qv;
-                bestAction = a;
+                qNew = qAction;
+                newActionNdx = a;
             }
         }
 
-        return (Action)bestAction;
+        if (qNew > qCurrent + this.actionChangeThreshold) {
+            return (Action)newActionNdx;
+        }
+        return (Action)currentActionNdx;
     }
 
     public void UpdateKnowledge(
